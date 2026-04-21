@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useAgentState, type AgentLogEvent } from '@/context/AgentStateContext';
 
 function formatTime(ts: number): string {
@@ -29,10 +29,16 @@ function LogLine({ event }: { event: AgentLogEvent }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      className="flex gap-2 leading-relaxed"
-      style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, lineHeight: 1.6 }}
+      className="flex gap-2"
+      style={{
+        fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+        fontSize: 12,
+        lineHeight: 1.6,
+      }}
     >
-      <span style={{ color: 'rgba(255,255,255,0.3)' }}>[{formatTime(event.timestamp)}]</span>
+      <span className="flex-shrink-0" style={{ color: 'rgba(255,255,255,0.3)' }}>
+        [{formatTime(event.timestamp)}]
+      </span>
       <span style={{ color: colorMap[event.type] }}>
         {prefix[event.type]}{event.text}
       </span>
@@ -46,8 +52,12 @@ export default function TerminalCard() {
   const visible = logs.slice(-12);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const el = scrollRef.current;
+    if (el) {
+      /* Use requestAnimationFrame so the DOM has rendered the new line before scrolling */
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
     }
   }, [logs.length]);
 
@@ -71,30 +81,28 @@ export default function TerminalCard() {
       {/* Terminal header line */}
       <div
         className="text-white/40 mb-3"
-        style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}
+        style={{ fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace", fontSize: 12 }}
       >
         {'>'} SIGNALFLUX AGENT v2.6.0
       </div>
 
-      {/* Scrollable log area */}
+      {/* Scrollable log area — logs accumulate, last 12 shown */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto pr-2 scrollbar-thin"
+        className="flex-1 overflow-y-auto pr-2"
         style={{
-          maskImage: 'linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%)',
-          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%)',
+          maskImage: 'linear-gradient(to bottom, transparent 0%, black 4%, black 96%, transparent 100%)',
+          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 4%, black 96%, transparent 100%)',
         }}
       >
-        <AnimatePresence mode="popLayout">
-          {visible.map((event) => (
-            <LogLine key={event.id} event={event} />
-          ))}
-        </AnimatePresence>
+        {visible.map((event) => (
+          <LogLine key={event.id} event={event} />
+        ))}
 
         {/* Blinking cursor */}
         <div
           className="mt-1"
-          style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}
+          style={{ fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace", fontSize: 12 }}
         >
           <span className="text-white/30">{'>'} </span>
           <span className="animate-pulse text-cobalt">█</span>

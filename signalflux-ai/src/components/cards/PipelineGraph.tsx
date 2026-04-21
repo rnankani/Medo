@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import { useAgentState } from '@/context/AgentStateContext';
 import { SPRING, glassCardStyle } from '@/lib/styles';
 import { randomTrend, randomPct } from '@/lib/agent-utils';
@@ -16,8 +17,9 @@ const NODES = [
 
 const NODE_SPACING = 64;
 const NODE_SIZE = 40;
-const CENTER_X = 80;
+const CENTER_X = 50;
 const START_Y = 40;
+const SVG_WIDTH = 260;
 
 function generateTraceData(): Record<string, string | number> {
   return {
@@ -30,24 +32,127 @@ function generateTraceData(): Record<string, string | number> {
   };
 }
 
+function MedoDrawer({
+  open,
+  onClose,
+  traceData,
+}: {
+  open: boolean;
+  onClose: () => void;
+  traceData: Record<string, string | number>;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    if (open) {
+      window.addEventListener('keydown', onKey);
+      return () => window.removeEventListener('keydown', onKey);
+    }
+  }, [open, onClose]);
+
+  return createPortal(
+    <AnimatePresence>
+      {open && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0"
+            style={{ background: 'rgba(0,0,0,0.6)', zIndex: 9998 }}
+          />
+
+          {/* Drawer */}
+          <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={SPRING}
+            className="fixed top-0 right-0 h-full p-6 flex flex-col"
+            style={{
+              width: 380,
+              zIndex: 9999,
+              ...glassCardStyle,
+              borderRadius: 0,
+              borderLeft: '1px solid rgba(46,91,255,0.3)',
+              background: 'linear-gradient(135deg, rgba(5,5,5,0.97) 0%, rgba(10,10,30,0.98) 100%)',
+            }}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <span
+                className="font-mono tracking-[0.15em]"
+                style={{ fontSize: 10, color: '#2E5BFF' }}
+              >
+                MEDO EXECUTION TRACE
+              </span>
+              <button
+                onClick={onClose}
+                className="text-white/40 hover:text-white transition-colors text-lg"
+              >
+                ×
+              </button>
+            </div>
+
+            <div
+              className="flex-1 overflow-y-auto"
+              style={{
+                fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
+                fontSize: 11,
+                lineHeight: 2,
+              }}
+            >
+              <span style={{ color: 'rgba(255,255,255,0.4)' }}>{'{'}</span>
+              {Object.entries(traceData).map(([key, value]) => (
+                <div key={key} className="pl-4">
+                  <span style={{ color: '#2E5BFF' }}>&quot;{key}&quot;</span>
+                  <span style={{ color: 'rgba(255,255,255,0.3)' }}>: </span>
+                  <span
+                    style={{
+                      color:
+                        key === 'filter_result'
+                          ? '#ADFF2F'
+                          : typeof value === 'number'
+                          ? '#FFB800'
+                          : 'rgba(255,255,255,0.85)',
+                    }}
+                  >
+                    {typeof value === 'string' ? `"${value}"` : value}
+                  </span>
+                </div>
+              ))}
+              <span style={{ color: 'rgba(255,255,255,0.4)' }}>{'}'}</span>
+            </div>
+
+            <div className="mt-4 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <span className="text-white/30 font-mono" style={{ fontSize: 10 }}>
+                Click Medo Filter node to refresh trace
+              </span>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>,
+    document.body
+  );
+}
+
 export default function PipelineGraph() {
   const { activeNode } = useAgentState();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [traceData, setTraceData] = useState<Record<string, string | number>>(generateTraceData);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const handleMedoClick = useCallback(() => {
     setTraceData(generateTraceData());
     setDrawerOpen(true);
   }, []);
 
-  /* Close on Escape */
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setDrawerOpen(false);
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  const handleClose = useCallback(() => setDrawerOpen(false), []);
 
   return (
     <>
@@ -62,9 +167,9 @@ export default function PipelineGraph() {
 
         <div className="flex-1 flex items-center justify-center">
           <svg
-            width="160"
+            width={SVG_WIDTH}
             height={START_Y * 2 + NODE_SPACING * 4}
-            viewBox={`0 0 160 ${START_Y * 2 + NODE_SPACING * 4}`}
+            viewBox={`0 0 ${SVG_WIDTH} ${START_Y * 2 + NODE_SPACING * 4}`}
           >
             {/* Connector lines */}
             {NODES.slice(0, -1).map((node, i) => {
@@ -143,13 +248,13 @@ export default function PipelineGraph() {
                     }}
                   />
 
-                  {/* Node label */}
+                  {/* Node label — full text visible */}
                   <text
                     x={CENTER_X + NODE_SIZE / 2 + 14}
                     y={y + NODE_SIZE / 2 + 4}
                     fill={isActive ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)'}
                     style={{
-                      fontFamily: "'JetBrains Mono', monospace",
+                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                       fontSize: 10,
                       letterSpacing: '0.05em',
                       transition: 'fill 0.3s',
@@ -165,7 +270,7 @@ export default function PipelineGraph() {
                     textAnchor="middle"
                     fill={isActive ? '#2E5BFF' : 'rgba(46,91,255,0.4)'}
                     style={{
-                      fontFamily: "'JetBrains Mono', monospace",
+                      fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace",
                       fontSize: 11,
                       fontWeight: 500,
                       transition: 'fill 0.3s',
@@ -180,89 +285,10 @@ export default function PipelineGraph() {
         </div>
       </div>
 
-      {/* ── Medo Execution Trace Drawer ─────────────────────────────── */}
-      <AnimatePresence>
-        {drawerOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setDrawerOpen(false)}
-              className="fixed inset-0 z-50"
-              style={{ background: 'rgba(0,0,0,0.6)' }}
-            />
-
-            {/* Drawer */}
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={SPRING}
-              className="fixed top-0 right-0 h-full z-50 p-6 flex flex-col"
-              style={{
-                width: 380,
-                ...glassCardStyle,
-                borderRadius: 0,
-                borderLeft: '1px solid rgba(46,91,255,0.3)',
-                background: 'linear-gradient(135deg, rgba(5,5,5,0.97) 0%, rgba(10,10,30,0.98) 100%)',
-              }}
-            >
-              <div className="flex items-center justify-between mb-6">
-                <span
-                  className="font-mono tracking-[0.15em]"
-                  style={{ fontSize: 10, color: '#2E5BFF' }}
-                >
-                  MEDO EXECUTION TRACE
-                </span>
-                <button
-                  onClick={() => setDrawerOpen(false)}
-                  className="text-white/40 hover:text-white transition-colors text-lg"
-                >
-                  ×
-                </button>
-              </div>
-
-              <div
-                className="flex-1 overflow-y-auto"
-                style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 11,
-                  lineHeight: 2,
-                }}
-              >
-                <span style={{ color: 'rgba(255,255,255,0.4)' }}>{'{'}</span>
-                {Object.entries(traceData).map(([key, value]) => (
-                  <div key={key} className="pl-4">
-                    <span style={{ color: '#2E5BFF' }}>&quot;{key}&quot;</span>
-                    <span style={{ color: 'rgba(255,255,255,0.3)' }}>: </span>
-                    <span
-                      style={{
-                        color:
-                          key === 'filter_result'
-                            ? '#ADFF2F'
-                            : typeof value === 'number'
-                            ? '#FFB800'
-                            : 'rgba(255,255,255,0.85)',
-                      }}
-                    >
-                      {typeof value === 'string' ? `"${value}"` : value}
-                    </span>
-                  </div>
-                ))}
-                <span style={{ color: 'rgba(255,255,255,0.4)' }}>{'}'}</span>
-              </div>
-
-              <div className="mt-4 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                <span className="text-white/30 font-mono" style={{ fontSize: 10 }}>
-                  Click Medo Filter node to refresh trace
-                </span>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      {/* Drawer portaled to body to avoid overflow clipping */}
+      {mounted && (
+        <MedoDrawer open={drawerOpen} onClose={handleClose} traceData={traceData} />
+      )}
     </>
   );
 }

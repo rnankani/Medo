@@ -43,8 +43,8 @@ const LOG_POOL: LogTemplate[] = [
   { text: () => "Generating cinematic vertical format (47s hook-optimized)...", type: "info", weight: 2 },
   { text: () => "Rendering 4K video overlay with stock footage...", type: "info", weight: 1 },
   { text: () => "Scheduling cross-platform post sequence...", type: "info", weight: 1 },
-  { text: () => "Post successful — affiliate loop activated", type: "success", weight: 2 },
-  { text: () => "Revenue event registered: +$0.12 affiliate click", type: "success", weight: 1 },
+  { text: () => "Post successful — affiliate loop activated", type: "success", weight: 3 },
+  { text: () => "Revenue event registered: +$0.12 affiliate click", type: "success", weight: 2 },
   { text: () => "⚠ Rate limit on Instagram endpoint — rerouting via mirror node", type: "warn", weight: 2 },
   { text: () => "⚠ Telegram channel gone dark — switching to backup cluster", type: "warn", weight: 1 },
   { text: () => "⚠ Rendering queue at 94% capacity — throttling batch", type: "warn", weight: 1 },
@@ -89,10 +89,11 @@ export function AgentStateProvider({ children }: { children: React.ReactNode }) 
 
   const tick = useCallback(() => {
     const template = pickWeightedLog();
+    const eventType = template.type;
     const newEvent: AgentLogEvent = {
       id: `evt-${Date.now()}-${idCounter.current++}`,
       text: template.text(),
-      type: template.type,
+      type: eventType,
       timestamp: Date.now(),
     };
 
@@ -101,9 +102,13 @@ export function AgentStateProvider({ children }: { children: React.ReactNode }) 
       const reachDelta = Math.floor(Math.random() * 800 + 200);
       const engDelta = (Math.random() * 0.2 - 0.1);
       const nextEng = Math.min(12, Math.max(6, prev.engagementRate + engDelta));
-      const revDelta = template.type === 'success' ? randomRevenueTick() : 0;
+      const revDelta = eventType === 'success' ? randomRevenueTick() : 0;
       const nextRevenue = parseFloat((prev.revenue + revDelta).toFixed(2));
       const nextMilestone = prev.isMilestoneHit || nextRevenue >= 100;
+
+      if (revDelta > 0) {
+        console.log(`[SignalFlux] Revenue +$${revDelta.toFixed(2)} → $${nextRevenue.toFixed(2)}`);
+      }
 
       const nextLogs = [...prev.logs, newEvent].slice(-50);
 
